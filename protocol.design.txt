@@ -1,0 +1,123 @@
+David Simonov
+das892
+11301273
+
+####################################################################
+######> Calendar Server Application Protocol Design Document <######
+####################################################################
+
+###################
+###> Overview: <###
+
+    - This document outlines the application protocol used by the calendar
+    server application to communicate between the client and server. The 
+    protocol is designed to facilitate a variety of operations related to 
+    managing calendar events, including adding, removing, updating, and 
+    retrieving events. It supports six primary commands: 
+    
+    ADD, REMOVE, UPDATE, GET, GETEVENT, and GETALL.
+
+#############################
+###> Protocol Structure: <###
+
+    - The protocol uses a structured format for requests and responses, with
+    each entry separated by a single whitespace. The general structure for 
+    requests is as follows:
+    
+    >>> <username> <command> [Attributes]
+
+###################
+###> Username: <###
+
+    - The username is a 20-character string with no whitespace allowed.
+    - It uniquely identifies the user performing the operation.
+
+##################
+###> Command: <###
+
+    - Specifies the operation to be performed. It can be one of six commands: 
+    
+    ADD, REMOVE, UPDATE, GET, GETEVENT, or GETALL.
+
+#####################
+###> Attributes: <###
+
+    - Attributes are additional parameters required by certain commands. Their 
+    presence and format depend on the command issued.
+    - The structure of attributes for each command is detailed in the following
+    section.
+
+
+
+
+#################################
+###> Commands and Attributes <###
+#################################
+
+##############
+###> ADD: <###
+
+    - Adds a new event to the user's calendar.
+    
+    >>> <username> ADD <date> <start time> <end time> <event title>
+    
+    date: The date of the event in DD:MM:YYYY format.
+    start/end time: The start and end times of the event in HHMM format.
+    event title: A 20-character string (with no whitespace) titling the event.
+
+#################
+###> REMOVE: <###
+    
+    - Removes an event from the user's calendar.
+    
+    >>> <username> REMOVE <date> <start time>
+
+    date and start time: Used to uniquely identify the event to be removed.
+
+#################
+###> UPDATE: <###
+
+    - Updates the details of an existing event.
+
+    >>> <username> UPDATE <date> <start time> <new end time> <new event title>
+
+    new end time and new event title: New end time and title for the event
+    identified by the date and start time.
+
+##############
+###> GET: <###
+
+    - Retrieves events for a given date or an event specified by start time.
+
+    >>> <username> GET <date> <start time> (optional)
+
+    date: The date for which events are requested.
+    start time: this is an optional attribute, if it is included, the server
+    knows to get only the event specified by this attribute, otherwise it gets
+    all the events for the specified date.
+
+#################
+###> GETALL: <###
+
+    - Requests the total number of events for the user.
+
+    >>> <username> GETALL
+
+    The server responds with the total number of events. The client then uses 
+    GETEVENT to retrieve each event one by one.
+
+###################
+###> GETEVENT: <###
+
+    - Retrieves a specific event by index.
+    
+    >>> <username> GETEVENT <index>
+    
+    index: The numerical index of the event to retrieve, starting from 1.
+
+####################
+###> Responses: <###
+
+    - The server responds to each request with either a confirmation of the 
+    action taken or an explanation of why the request failed. For GET and 
+    GETEVENT commands, the server provides the requested event titles.

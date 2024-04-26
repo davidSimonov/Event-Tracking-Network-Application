@@ -1,0 +1,125 @@
+David Simonov
+das892
+11301273
+
+#################################################################
+######> Calendar Server Application Architecture Document <######
+#################################################################
+
+#######################
+###> Introduction: <###
+
+    - This document describes the architecture of the Calendar Server
+    application, detailing the client-server interaction, server implementation
+    variants (select(), multi-threaded, multi-process), and the internal
+    workings of the server utilizing the utils module and the calendar library.
+
+###############################################
+###> Client Design and Command Processing: <###
+
+    - The client is designed to take commands from the terminal, validate them,
+    and then structure a request buffer to be sent to the server. Validation
+    checks include ensuring dates and times are in the correct format 
+    (DD:MM:YYYY and HHMM, respectively), start times precede end times, and
+    usernames and event titles are within format constraints (20 characters, no 
+    whitespace).
+
+    - Upon validation, the client invokes a specific function for each command
+    to structure the request buffer. This buffer is then sent to the server for
+    processing.
+
+    - After sending the request it waits for the server's response before
+    printing it to the user.
+
+##########################
+###> Server Variants: <###
+
+    >>> Select-Based Server:
+    - Utilizes select() to handle multiple clients concurrently in a 
+    single-threaded manner. The server listens on port 36000 and uses select()
+    to manage multiple client sockets, processing requests as they become
+    readable.
+    - When the server socket shows activity, it is interpreted as a new client
+    connecting and the client socket is added to read_fds which stores all the
+    sockets to be monitored.
+    - When a client socket shows activity it is treated as an incoming request,
+    and is processed using the Utils module, after which the response is sent
+    back to the client.
+
+    >>> Multi-Threaded Server:
+    - For each new client connection, the server spawns a new thread to handle
+    the request, allowing for parallel processing. Threads share access to the
+    calendar database, necessitating synchronization mechanisms to prevent race
+    conditions.
+    - Each thread that is spawned is responsible for binding with the
+    client_socket givent to it as an arg by the main thread, and reading the
+    request in that socket before communicating with Utils and responding to the
+    client.
+
+    >>> Multi-Process Server
+    - The design choices for this server implementation come from an unforeseen
+    limitation inroduiced due to the nature of processes having seperate memory.
+    - The server first reads the request from a new connnection and then it uses
+    a function provided by the Utils module to read the request type. If the
+    request is of type read it can fork() a new process and have it handle the
+    request and send a response back to the client, while the main process is
+    free to continue listening for new connections. If the request is of type
+    write, the main process handles it.
+    - The reason for this choice was because I decided to do the servers last,
+    and already had implemented the client, utils, and the calendar library.
+    The way these modules are structure doesn't allow for memory sharing as they
+    heavily rely on pointers, and because their structure is so deeple nested
+    using an IPC approach was not feasible. Hence the limitation of the server
+    to only fork() a new process when the request is of type read. 
+
+########################################
+###> Integration with Utils Module: <###
+
+    - The servers utilize the Utils module to initialize the calendar database
+    and process requests via the processRequest() function. This function acts
+    as an intermediary between the server and the calendar library, handling
+    user identification, attribute parsing, and request processing based on
+    command type.
+
+    - processUser(): Identifies the user associated with a request, creating a
+    new user if necessary.
+    - processAttributes(): Extracts and populates variables with command
+    attributes, leaving unprovided attributes as empty strings.
+    - processRequestType(): Determines the request command.
+
+    - These functions together allow processRequest() to call the appropriate
+    method from the calendar library with the specified attributes and User.
+
+###############################################
+###> Calendar Library and Data Structures: <###
+    
+    - The calendar library (calendar.a) provides the functionality to manage
+    calendar events. It processes string inputs to extract and convert data into
+    integer values for calculations, modifying User objects as requested. These
+    methods return Events in the form of pointers or arrays and error codes to
+    allow Utils to format a response based on these returns that can be sent to
+    the server to be communicated to the client.
+
+##########################
+###> Data Structures: <###
+
+    - Date: Holds day, month, and year integers.
+    - Event: Contains an event title, a Date object, and start/end times.
+    - User: Includes a username, a list of Event objects ordered by date and
+    time, and a mutex for ensuring concurrent access is possible.
+
+    - User objects are held in an array called users that is initialized in the
+    Utils module when initializeCalendar() is called by the server.
+
+#######################################
+###> Concurrent Access Management: <###
+
+    - Concurrency is managed through mutexes. Each User object contains a mutex
+    that is locked when calendar library functions operate on that user,
+    ensuring thread-safe modifications. Additionally, a global mutex protects
+    the users list during search and modification operations to prevent
+    concurrent access issues.
+
+
+BONUS 1:    technically the app does specify when events are overlapping, and it
+            wont add or update an event if it will overlap with the next one.
